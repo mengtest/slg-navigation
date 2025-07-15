@@ -104,9 +104,12 @@ end
 ---@param node2 LuaNavigationNode
 local function connect_nodes(self, node1, node2)
     local path = self:find_path(node1.pos, node2.pos)
-    local length = calc_path_length(path)
-    node1.connected[node2] = { path, length }
-    node2.connected[node1] = { reverse_path(path), length }
+    -- 只有当路径有效时才建立连接
+    if #path >= 2 then
+        local length = calc_path_length(path)
+        node1.connected[node2] = { path, length }
+        node2.connected[node1] = { reverse_path(path), length }
+    end
 end
 
 
@@ -309,13 +312,12 @@ function mt:quick_remark_area(change_pos)
         portals_to_readd[#portals_to_readd + 1] = {
             pos = cell2pos(self, portal_cell),
             camp = portal.camp,
-            radius = 10, -- 默认半径
-            joints = portal.joints
+            -- 不保存原始joints，让传送门重新自动寻找
         }
         self:del_portal(cell2pos(self, portal_cell))
     end
 
-    -- 重新添加传送点
+    -- 重新添加传送点（不传递joints参数，让其重新自动寻找）
     for _, portal_info in ipairs(portals_to_readd) do
         self:add_portal(portal_info.pos, portal_info.camp)
     end

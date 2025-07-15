@@ -41,3 +41,12 @@ nav.core:dump()
 nav.core:dump_connected()
 
 test_find_path({x = 1, y = 8}, {x = 16, y = 3})
+
+local pos = {x = 9, y = 9}
+nav:set_obstacle(pos)
+nav:quick_remark_area(pos)
+
+nav.core:dump()
+nav.core:dump_connected()
+
+test_find_path({x = 1, y = 8}, {x = 16, y = 3})
