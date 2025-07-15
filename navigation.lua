@@ -268,6 +268,40 @@ function mt:quick_remark_area(change_pos)
         -- 处理移除阻挡点的情况：合并原来分离的区域
         self:_handle_remove_block(x, y, set_area_id)
     end
+    
+    -- 强制检查变化位置周围的传送门，即使连通性分区没有变化
+    -- 因为路径可能需要绕开新障碍物
+    local affected_area_ids = {}
+    if is_block then
+        -- 障碍物情况：检查周围的连通区域
+        local directions = {{ -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 }}
+        for _, dir in ipairs(directions) do
+            local nx, ny = x + dir[1], y + dir[2]
+            if nx >= 0 and nx < self.w and ny >= 0 and ny < self.h and
+                not self.core:is_block(nx, ny) then
+                local area_id = self.core:get_connected_id(nx, ny)
+                if area_id > 0 then
+                    affected_area_ids[area_id] = true
+                end
+            end
+        end
+    else
+        -- 移除障碍物情况：检查当前位置的连通区域
+        local area_id = self.core:get_connected_id(x, y)
+        if area_id > 0 then
+            affected_area_ids[area_id] = true
+        end
+    end
+    
+    for portal_cell, portal in pairs(self.portals) do
+        for _, joint in pairs(portal.joints) do
+            local joint_area_id = self:get_area_id_by_pos(joint)
+            if affected_area_ids[joint_area_id] then
+                affected_portals[portal_cell] = portal
+                break
+            end
+        end
+    end
 
     -- 删除受影响的传送点
     local portals_to_readd = {}
@@ -315,6 +349,9 @@ function mt:_handle_add_block(x, y, set_area_id)
 
     -- 2. 重新添加阻挡点
     self.core:add_block(x, y)
+    
+    -- 2.1. 设置障碍物位置的连通性ID为0
+    self.core:set_connected_id(x, y, 0)
 
     -- 3. 如果没有邻近点，直接返回
     if #neighbor_points == 0 then
