@@ -55,25 +55,6 @@ static void push_fpos(lua_State* L, float fx, float fy, int num) {
     lua_rawseti(L, -2, num);
 }
 
-static void find_walkable_point_in_cell(Map* m, int center_pos, float fx1, float fy1,
-    float fx2, float fy2, float* x, float* y) {
-    int x0, y0, ix, iy;
-    float fx0, fy0;
-    pos2xy(m, center_pos, &ix, &iy);
-
-    for(x0 = ix; x0 <= ix + 1; x0 ++) {
-        for(y0 = iy; y0 <= iy + 1; y0 ++) {
-            fx0 = x0 == ix ? x0 - 0.1 : x0 + 0.1;
-            fy0 = y0 == iy ? y0 - 0.1 : y0 + 0.1;
-            if(find_line_obstacle(m, fx0, fy0, fx1, fy1) < 0 && find_line_obstacle(m, fx0, fy0, fx2, fy2) < 0) {
-                *x = x0;
-                *y = y0;
-                return;
-            }
-        }
-    }
-}
-
 static void push_path_to_fstack(lua_State* L,
                                 Map* m,
                                 float fx1,
@@ -82,7 +63,6 @@ static void push_path_to_fstack(lua_State* L,
                                 float fy2) {
     lua_newtable(L);
     int i, ix, iy;
-    float fx, fy;
     int num = 1;
     if (m->ipath_len < 2) {
         return;
@@ -91,34 +71,11 @@ static void push_path_to_fstack(lua_State* L,
     push_fpos(L, fx1, fy1, num++);
     pos2xy(m, m->ipath[m->ipath_len - 2], &ix, &iy);
 
-    int obs_pos = find_line_obstacle(m, fx1, fy1, ix + 0.5, iy + 0.5);
-    if (obs_pos >= 0) {
-        // 插入起点到第二个路点间的拐点
-        fx = -1;
-        fy = -1;
-        find_walkable_point_in_cell(m, obs_pos, ix + 0.5, iy + 0.5, fx1, fy1, &fx, &fy);
-        if(fx >= 0 && fy >= 0) {
-            push_fpos(L, fx, fy, num++);
-        }
-    }
-
     for (i = m->ipath_len - 2; i >= 1; i--) {
         pos2xy(m, m->ipath[i], &ix, &iy);
         push_fpos(L, ix + 0.5, iy + 0.5, num++);
     }
 
-    if (m->ipath_len > 2) {
-        // 插入倒数第二个路点到终点间的拐点
-        obs_pos = find_line_obstacle(m, ix + 0.5, iy + 0.5, fx2, fy2);
-        if (obs_pos >= 0) {
-            fx = -1;
-            fy = -1;
-            find_walkable_point_in_cell(m, obs_pos, ix + 0.5, iy + 0.5, fx2, fy2, &fx, &fy);
-            if(fx >= 0 && fy >= 0) {
-                push_fpos(L, fx, fy, num++);
-            }
-        }
-    }
     push_fpos(L, fx2, fy2, num++);
 }
 

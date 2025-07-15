@@ -36,16 +36,19 @@ int find_line_obstacle(Map* m, float x1, float y1, float x2, float y2) {
         if (error2 > -dy) {
             error -= dy;
             x += x_inc;
+            // 每次移动后立即检查
+            if (!map_walkable(m, xy2pos(m, x, y))) {
+                return xy2pos(m, x, y);
+            }
         }
         
         if (error2 < dx) {
             error += dx;
             y += y_inc;
-        }
-        
-        // 检查当前格子是否可行走
-        if (!map_walkable(m, xy2pos(m, x, y))) {
-            return xy2pos(m, x, y);
+            // 每次移动后立即检查
+            if (!map_walkable(m, xy2pos(m, x, y))) {
+                return xy2pos(m, x, y);
+            }
         }
     }
     
