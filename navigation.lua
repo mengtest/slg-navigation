@@ -915,11 +915,13 @@ local function find_path_start_in_portal(self, from_area_id, from_pos, to_area_i
 end
 
 function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
-    ignore_list = ignore_list or {}
-    if self.core:is_block(mfloor(from_pos.x), mfloor(from_pos.y)) then
-        ignore_list[#ignore_list + 1] = from_pos -- 自动忽略起点
-    end
+    local ignore_map = {[from_pos] = true} -- 自动忽略起点
     for _, pos in pairs(ignore_list) do
+        if self.core:is_block(mfloor(pos.x), mfloor(pos.y)) then
+            ignore_map[pos] = true
+        end
+    end
+    for pos in pairs(ignore_map) do
         self.core:clear_block(mfloor(pos.x), mfloor(pos.y))
     end
     local path
@@ -945,7 +947,7 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
         print(errmsg)
     end
 
-    for _, pos in pairs(ignore_list) do
+    for pos in pairs(ignore_map) do
         self.core:add_block(mfloor(pos.x), mfloor(pos.y))
     end
     if #path < 2 then
