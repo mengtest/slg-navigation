@@ -242,7 +242,7 @@ function mt:quick_remark_area(change_pos)
 
     -- 检查格子是否是传送点的连接点，如果是则记录其传送点
     local function check_portal_joint(px, py)
-        local pos = {x = px + 0.5, y = py + 0.5}
+        local pos = { x = px + 0.5, y = py + 0.5 }
         for portal_cell, portal in pairs(self.portals) do
             for _, joint in pairs(portal.joints) do
                 if mfloor(joint.x) == px and mfloor(joint.y) == py then
@@ -271,13 +271,13 @@ function mt:quick_remark_area(change_pos)
         -- 处理移除阻挡点的情况：合并原来分离的区域
         self:_handle_remove_block(x, y, set_area_id)
     end
-    
+
     -- 强制检查变化位置周围的传送门，即使连通性分区没有变化
     -- 因为路径可能需要绕开新障碍物
     local affected_area_ids = {}
     if is_block then
         -- 障碍物情况：检查周围的连通区域
-        local directions = {{ -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 }}
+        local directions = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
         for _, dir in ipairs(directions) do
             local nx, ny = x + dir[1], y + dir[2]
             if nx >= 0 and nx < self.w and ny >= 0 and ny < self.h and
@@ -295,7 +295,7 @@ function mt:quick_remark_area(change_pos)
             affected_area_ids[area_id] = true
         end
     end
-    
+
     for portal_cell, portal in pairs(self.portals) do
         for _, joint in pairs(portal.joints) do
             local joint_area_id = self:get_area_id_by_pos(joint)
@@ -351,7 +351,7 @@ function mt:_handle_add_block(x, y, set_area_id)
 
     -- 2. 重新添加阻挡点
     self.core:add_block(x, y)
-    
+
     -- 2.1. 设置障碍物位置的连通性ID为0
     self.core:set_connected_id(x, y, 0)
 
@@ -914,8 +914,29 @@ local function find_path_start_in_portal(self, from_area_id, from_pos, to_area_i
     return path
 end
 
+function mt:get_neighbor_area_id(pos, max_size)
+    -- 从周边格子查找非0的area_id
+    local x = mfloor(pos.x)
+    local y = mfloor(pos.y)
+    for i = 1, max_size do
+        for _, dir in pairs(DIR_OFFSET) do
+            local nx = x + dir.x * i
+            local ny = y + dir.y * i
+            if nx >= 0 and nx < self.w and ny >= 0 and ny < self.h then
+                local area_id = self.core:get_connected_id(nx, ny)
+                if area_id > 0 then
+                    return area_id
+                end
+            end
+        end
+    end
+    return 0
+end
+
 function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
-    local ignore_map = {[from_pos] = true} -- 自动忽略起点
+    ignore_list = ignore_list or { } 
+    ignore_list[#ignore_list + 1] = from_pos -- 自动忽略起点
+    local ignore_map = {}
     for _, pos in pairs(ignore_list) do
         if self.core:is_block(mfloor(pos.x), mfloor(pos.y)) then
             ignore_map[pos] = true
@@ -923,6 +944,7 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
     end
     for pos in pairs(ignore_map) do
         self.core:clear_block(mfloor(pos.x), mfloor(pos.y))
+        self:set_connected_id(pos, self:get_neighbor_area_id(pos, #ignore_list))
     end
     local path
     local from_area_id = self:get_area_id_by_pos(from_pos)
@@ -949,6 +971,7 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
 
     for pos in pairs(ignore_map) do
         self.core:add_block(mfloor(pos.x), mfloor(pos.y))
+        self:set_connected_id(pos, 0)
     end
     if #path < 2 then
         print(string.format("cannot find path (%s, %s) =>(%s, %s)", from_pos.x, from_pos.y, to_pos.x, to_pos.y))
