@@ -197,7 +197,7 @@ static int lnav_set_connected_id(lua_State* L) {
     }
     
     if (!m->mark_connected) {
-        luaL_error(L, "Map has not been marked for connected areas");
+        luaL_error(L, "Map has not been marked for connected areas, mark_connected: %d", m->mark_connected);
     }
     
     m->connected[m->width * y + x] = connected_id;
@@ -265,8 +265,7 @@ static int lnav_mark_connected(lua_State* L) {
         }
     }
 
-    m->mark_connected = connected_num;
-
+    m->mark_connected = connected_num > 0 ? connected_num : 1;
     return 0;
 }
 

@@ -20,7 +20,7 @@ typedef struct map {
     int start;
     int end;
     int* comefrom;
-    char mark_connected;
+    int mark_connected;
     int* connected;
     int *queue;
     char *visited;
