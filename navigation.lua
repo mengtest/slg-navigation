@@ -234,6 +234,9 @@ function mt:get_max_connected_id()
 end
 
 function mt:quick_remark_area(change_pos)
+    if self:get_max_connected_id() <= 0 then
+        return
+    end
     local x = mfloor(change_pos.x)
     local y = mfloor(change_pos.y)
 
