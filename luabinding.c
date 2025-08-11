@@ -166,6 +166,7 @@ static int lnav_add_block(lua_State* L) {
         luaL_error(L, "Position (%d,%d) is out of map", x, y);
     }
     BITSET(m->m, m->width * y + x);
+    m->connected[m->width * y + x] = 0;
     return 0;
 }
 
@@ -225,6 +226,7 @@ static int lnav_blockset(lua_State* L) {
         lua_geti(L, -2, 2);
         int y = lua_tointeger(L, -1);
         setobstacle(L, m, x, y);
+        m->connected[m->width * y + x] = 0;
         lua_pop(L, 3);
         ++i;
     }

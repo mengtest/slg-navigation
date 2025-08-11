@@ -285,14 +285,12 @@ function mt:quick_remark_area(pos_list, limit_count)
                 
                 -- 检查是否到达地图边界
                 if cx == 0 or cx == self.w - 1 or cy == 0 or cy == self.h - 1 then
-                    print(string.format("[quick_remark_area] 阻挡格子 (%d,%d) 到达地图边界，执行完整更新", cx, cy))
                     self:update_areas()
                     return true  -- 返回true表示达到边界
                 end
                 
                 -- 检查是否超过限制
                 if blocked_count >= limit_count then
-                    print(string.format("[quick_remark_area] 相连阻挡数量 %d 达到限制 %d，执行完整更新", blocked_count, limit_count))
                     self:update_areas()
                     return true  -- 返回true表示达到限制
                 end
@@ -347,7 +345,54 @@ function mt:quick_remark_area(pos_list, limit_count)
     end
     
     if #blocked_coords == 0 then
-        print("[quick_remark_area] 没有找到相邻的阻挡坐标")
+        -- 计算pos_list的矩形边界
+        if #pos_list == 0 then
+            return
+        end
+        
+        local pos_min_x, pos_max_x = mfloor(pos_list[1].x), mfloor(pos_list[1].x)
+        local pos_min_y, pos_max_y = mfloor(pos_list[1].y), mfloor(pos_list[1].y)
+        
+        for _, pos in ipairs(pos_list) do
+            local px, py = mfloor(pos.x), mfloor(pos.y)
+            pos_min_x = math.min(pos_min_x, px)
+            pos_max_x = math.max(pos_max_x, px)
+            pos_min_y = math.min(pos_min_y, py)
+            pos_max_y = math.max(pos_max_y, py)
+        end
+        
+        -- 在矩形区域的外层找非0的area_id
+        local found_area_id = nil
+        
+        -- 检查外层格子
+        for py = pos_min_y - 1, pos_max_y + 1 do
+            for px = pos_min_x - 1, pos_max_x + 1 do
+                -- 只检查外层格子（边界格子）
+                if (px == pos_min_x - 1 or px == pos_max_x + 1 or py == pos_min_y - 1 or py == pos_max_y + 1) and
+                   px >= 0 and px < self.w and py >= 0 and py < self.h and
+                   not self.core:is_block(px, py) then
+                    local area_id = self.core:get_connected_id(px, py)
+                    if area_id > 0 then
+                        found_area_id = area_id
+                        goto found_id
+                    end
+                end
+            end
+        end
+        
+        ::found_id::
+        
+        -- 确定要设置的area_id
+        local target_area_id = found_area_id or (self.core:get_max_connected_id() + 1)
+        
+        -- 设置所有pos_list位置的area_id
+        for _, pos in ipairs(pos_list) do
+            local px, py = mfloor(pos.x), mfloor(pos.y)
+            if not self.core:is_block(px, py) then
+                self.core:set_connected_id(px, py, target_area_id)
+            end
+        end
+        
         return
     end
     
@@ -362,15 +407,7 @@ function mt:quick_remark_area(pos_list, limit_count)
         max_y = math.max(max_y, coord[2])
     end
     
-    print(string.format("[quick_remark_area] 找到 %d 个相邻阻挡坐标", #blocked_coords))
-    print(string.format("[quick_remark_area] 阻挡坐标矩形区域: (%d,%d) - (%d,%d)", 
-        min_x, min_y, max_x, max_y))
-    
-    -- 打印所有阻挡坐标详情
-    print("[quick_remark_area] 阻挡坐标列表:")
-    for i, coord in ipairs(blocked_coords) do
-        print(string.format("  [%d] (%d,%d)", i, coord[1], coord[2]))
-    end
+
     
     -- 第二步：在矩形区域内进行重新分区
     -- 扩展矩形区域，确保包含足够的上下文
@@ -380,9 +417,6 @@ function mt:quick_remark_area(pos_list, limit_count)
     local region_min_y = math.max(0, min_y - expand)
     local region_max_y = math.min(self.h - 1, max_y + expand)
     
-    print(string.format("[quick_remark_area] 重新分区区域: (%d,%d) - (%d,%d)", 
-        region_min_x, region_min_y, region_max_x, region_max_y))
-    
     -- 记录边界格子的原始分区ID（这些ID不允许改变）
     local boundary_ids = {}
     local is_boundary = function(px, py)
@@ -390,18 +424,14 @@ function mt:quick_remark_area(pos_list, limit_count)
     end
     
     -- 保存边界格子的分区ID
-    local boundary_count = 0
     for py = region_min_y, region_max_y do
         for px = region_min_x, region_max_x do
             if is_boundary(px, py) and not self.core:is_block(px, py) then
                 local id = self.core:get_connected_id(px, py)
                 boundary_ids[pos_key(px, py)] = id
-                boundary_count = boundary_count + 1
-                print(string.format("[quick_remark_area] 边界格子 (%d,%d) ID: %d", px, py, id))
             end
         end
     end
-    print(string.format("[quick_remark_area] 保存了 %d 个边界格子ID", boundary_count))
     
     -- 清空区域内所有非边界格子的分区ID
     for py = region_min_y + 1, region_max_y - 1 do
@@ -478,19 +508,14 @@ function mt:quick_remark_area(pos_list, limit_count)
     end
     
     -- 处理内部未被边界扩散覆盖的连通区域，分配新的ID
-    local new_regions_count = 0
     for py = region_min_y + 1, region_max_y - 1 do
         for px = region_min_x + 1, region_max_x - 1 do
             if not self.core:is_block(px, py) and not visited[pos_key(px, py)] then
-                print(string.format("[quick_remark_area] 发现新连通区域起点 (%d,%d), 分配ID: %d", px, py, new_connected_id))
                 flood_fill(px, py, new_connected_id)
                 new_connected_id = new_connected_id + 1
-                new_regions_count = new_regions_count + 1
             end
         end
     end
-    
-    print(string.format("[quick_remark_area] 重新分区完成，创建了 %d 个新连通区域", new_regions_count))
 end
 
 function mt:get_area_id_by_pos(pos)
