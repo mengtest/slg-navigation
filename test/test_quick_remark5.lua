@@ -10,14 +10,18 @@ local nav = navigation.new(w, h, {
     {4, 5},
     {4, 6},
     {4, 7},
-    {4, 8},
-    {4, 9},
 })
 
 nav.core:dump()
 nav.core:dump_connected()
 
-nav:merge_area({x = 0, y = 8}, {x = 9, y = 9})
+
+nav:quick_remark_area2(4, 4, 8, 9, true)
+
+nav.core:dump()
+nav.core:dump_connected()
+
+nav:quick_remark_area2(4, 4, 8, 9, false)
 
 nav.core:dump()
 nav.core:dump_connected()

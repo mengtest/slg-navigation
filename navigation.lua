@@ -518,10 +518,111 @@ function mt:quick_remark_area(pos_list, limit_count)
     end
 end
 
----@param pos1 LuaNavigationPosition
----@param pos2 LuaNavigationPosition
-function mt:merge_area(pos1, pos2)
-    -- 四个方向的偏移量：上下左右
+---@param left number
+---@param right number
+---@param top number
+---@param bottom number
+---@param is_obstacle boolean 是否设置为阻挡
+function mt:quick_remark_area2(left, right, top, bottom, is_obstacle)
+    local left_x = mfloor(left)
+    local right_x = mfloor(right)
+    local top_y = mfloor(top)
+    local bottom_y = mfloor(bottom)
+    
+    -- 边界检查
+    left_x = math.max(0, left_x)
+    right_x = math.min(self.w - 1, right_x)
+    top_y = math.max(0, top_y)
+    bottom_y = math.min(self.h - 1, bottom_y)
+    
+    if left_x > right_x or top_y > bottom_y then
+        print("quick_remark_area2: 无效的矩形范围")
+        return
+    end
+    
+    -- 第一步：设置矩形范围内的阻挡/非阻挡状态
+    for y = top_y, bottom_y do
+        for x = left_x, right_x do
+            if is_obstacle then
+                self.core:add_block(x, y)
+                self.core:set_connected_id(x, y, 0)
+            else
+                self.core:clear_block(x, y)
+            end
+        end
+    end
+    
+    -- 第二步：找出矩形外面一圈的outline格子
+    local outline_pos_list = {}
+    local outline_set = {} -- 用于快速查找
+    
+    -- 上边
+    if top_y > 0 then
+        for x = math.max(0, left_x - 1), math.min(self.w - 1, right_x + 1) do
+            local pos = { x = x, y = top_y - 1 }
+            outline_pos_list[#outline_pos_list + 1] = pos
+            outline_set[pos2cell(self, pos)] = true
+        end
+    end
+    
+    -- 下边
+    if bottom_y < self.h - 1 then
+        for x = math.max(0, left_x - 1), math.min(self.w - 1, right_x + 1) do
+            local pos = { x = x, y = bottom_y + 1 }
+            outline_pos_list[#outline_pos_list + 1] = pos
+            outline_set[pos2cell(self, pos)] = true
+        end
+    end
+    
+    -- 左边
+    if left_x > 0 then
+        for y = top_y, bottom_y do
+            local pos = { x = left_x - 1, y = y }
+            outline_pos_list[#outline_pos_list + 1] = pos
+            outline_set[pos2cell(self, pos)] = true
+        end
+    end
+    
+    -- 右边
+    if right_x < self.w - 1 then
+        for y = top_y, bottom_y do
+            local pos = { x = right_x + 1, y = y }
+            outline_pos_list[#outline_pos_list + 1] = pos
+            outline_set[pos2cell(self, pos)] = true
+        end
+    end
+    
+    if #outline_pos_list == 0 then
+        -- 如果没有outline格子，且设置为非阻挡，给矩形区域设置新的area_id
+        if not is_obstacle then
+            local new_area_id = self.core:get_max_connected_id() + 1
+            for y = top_y, bottom_y do
+                for x = left_x, right_x do
+                    self.core:set_connected_id(x, y, new_area_id)
+                end
+            end
+        end
+        return
+    end
+    
+    -- 第三步：检查outline格子的阻挡状态
+    local blocked_count = 0
+    local walkable_count = 0
+    
+    for _, pos in ipairs(outline_pos_list) do
+        if self.core:is_block(pos.x, pos.y) then
+            blocked_count = blocked_count + 1
+        else
+            walkable_count = walkable_count + 1
+        end
+    end
+    
+    -- 如果outline格子都是阻挡或都是非阻挡，直接返回
+    if blocked_count == 0 or walkable_count == 0 then
+        return
+    end
+    
+    -- 第四步：从outline可行走格子开始遍历区域并设置area_id
     local directions = {
         { 0, -1 }, -- 上
         { 0, 1 },  -- 下
@@ -529,88 +630,115 @@ function mt:merge_area(pos1, pos2)
         { 1, 0 }   -- 右
     }
     
-    -- 从指定位置向四个方向搜索非0的area_id
-    local function find_area_id_around(pos, max_distance)
-        for distance = 1, max_distance do
-            for _, dir in ipairs(directions) do
-                local x = mfloor(pos.x) + dir[1] * distance
-                local y = mfloor(pos.y) + dir[2] * distance
-                
-                -- 检查边界
-                if x >= 0 and x < self.w and y >= 0 and y < self.h then
-                    local area_id = self.core:get_connected_id(x, y)
-                    if area_id > 0 then
-                        return area_id, { x = x, y = y }
-                    end
+    local global_visited = {} -- 全局访问标记，防止重复遍历
+    local new_area_id = self.core:get_max_connected_id() + 1
+    
+    -- 如果设置为非阻挡，尝试找到一个合适的existing area_id用于合并
+    local target_area_id = nil
+    if not is_obstacle then
+        for _, pos in ipairs(outline_pos_list) do
+            if not self.core:is_block(pos.x, pos.y) then
+                local existing_id = self.core:get_connected_id(pos.x, pos.y)
+                if existing_id > 0 then
+                    target_area_id = existing_id
+                    break
                 end
             end
         end
-        return 0, nil
     end
     
-    -- 从pos1和pos2分别搜索area_id
-    local area_id1, pos1_found = find_area_id_around(pos1, 5)
-    local area_id2, pos2_found = find_area_id_around(pos2, 5)
-    
-    -- 检查是否找到了两个不同的area_id
-    if area_id1 == 0 or area_id2 == 0 then
-        print("merge_area: 未找到有效的area_id")
-        return false
+    -- 标记所有outline格子为已访问，防止它们之间互相遍历
+    for _, pos in ipairs(outline_pos_list) do
+        global_visited[pos2cell(self, pos)] = true
     end
     
-    if area_id1 == area_id2 then
-        print("merge_area: 两个位置属于同一个区域，无需合并")
-        return false
-    end
-    
-    -- 确保area_id1是较小的ID（可选的优化，保持ID的连续性）
-    if area_id1 > area_id2 then
-        area_id1, area_id2 = area_id2, area_id1
-        pos1_found, pos2_found = pos2_found, pos1_found
-    end
-    
-    print(string.format("merge_area: 合并区域 %d -> %d", area_id2, area_id1))
-    
-    -- 从area_id2所在的坐标开始，使用flood fill遍历整个区域
-    local visited = {}
-    local queue = {}
-    local head = 1
-    
-    -- 将起始坐标加入队列
-    queue[#queue + 1] = pos2_found
-    visited[pos2cell(self, pos2_found)] = true
-    self.core:set_connected_id(pos2_found.x, pos2_found.y, area_id1)
-    
-    -- BFS遍历整个area_id2区域
-    while head <= #queue do
-        local current_pos = queue[head]
-        head = head + 1
+    -- BFS遍历函数
+    local function flood_fill_from_outline(start_pos, area_id)
+        if self.core:is_block(start_pos.x, start_pos.y) then
+            return 0 -- 阻挡格子不遍历
+        end
         
-        -- 检查四个方向的相邻格子
-        for _, dir in ipairs(directions) do
-            local nx = current_pos.x + dir[1]
-            local ny = current_pos.y + dir[2]
-            local new_pos = { x = nx, y = ny }
-            local cell_key = pos2cell(self, new_pos)
+        local queue = {}
+        local local_visited = {}
+        local head = 1
+        local count = 0
+        
+        queue[#queue + 1] = start_pos
+        local_visited[pos2cell(self, start_pos)] = true
+        
+        while head <= #queue do
+            local current_pos = queue[head]
+            head = head + 1
             
-            -- 检查边界和是否已访问
-            if nx >= 0 and nx < self.w and ny >= 0 and ny < self.h and 
-               not visited[cell_key] then
+            -- 设置area_id
+            self.core:set_connected_id(current_pos.x, current_pos.y, area_id)
+            count = count + 1
+            
+            -- 检查四个方向
+            for _, dir in ipairs(directions) do
+                local nx = current_pos.x + dir[1]
+                local ny = current_pos.y + dir[2]
+                local new_pos = { x = nx, y = ny }
+                local cell_key = pos2cell(self, new_pos)
                 
-                local current_area_id = self.core:get_connected_id(nx, ny)
-                
-                -- 如果是area_id2的格子，加入队列并更新为area_id1
-                if current_area_id == area_id2 then
-                    visited[cell_key] = true
-                    self.core:set_connected_id(nx, ny, area_id1)
+                -- 检查边界和访问状态
+                if nx >= 0 and nx < self.w and ny >= 0 and ny < self.h and
+                   not local_visited[cell_key] and 
+                   not global_visited[cell_key] and
+                   not self.core:is_block(nx, ny) then
+                    
+                    local_visited[cell_key] = true
+                    global_visited[cell_key] = true
                     queue[#queue + 1] = new_pos
                 end
             end
         end
+        
+        return count
     end
     
-    print(string.format("merge_area: 成功合并区域，共处理 %d 个格子", #queue))
-    return true
+    -- 先处理矩形内的格子（如果是非阻挡模式）
+    if not is_obstacle and target_area_id then
+        for y = top_y, bottom_y do
+            for x = left_x, right_x do
+                self.core:set_connected_id(x, y, target_area_id)
+                global_visited[pos2cell(self, { x = x, y = y })] = true
+            end
+        end
+
+    end
+    
+    -- 遍历所有outline的可行走格子
+    for _, pos in ipairs(outline_pos_list) do
+        if not self.core:is_block(pos.x, pos.y) then
+            local use_area_id = new_area_id
+            
+            -- 如果是非阻挡模式且有target_area_id，优先使用已存在的ID
+            local should_process = true
+            if not is_obstacle and target_area_id then
+                local existing_id = self.core:get_connected_id(pos.x, pos.y)
+                if existing_id == target_area_id then
+                    -- 这个outline格子已经是目标ID，跳过
+                    should_process = false
+                else
+                    -- 使用目标ID进行遍历
+                    use_area_id = target_area_id
+                end
+            end
+            
+            if should_process then
+                local count = flood_fill_from_outline(pos, use_area_id)
+                if count > 0 then
+                    
+                    if use_area_id == new_area_id then
+                        new_area_id = new_area_id + 1
+                    end
+                end
+            end
+        end
+    end
+    
+
 end
 
 function mt:get_area_id_by_pos(pos)
