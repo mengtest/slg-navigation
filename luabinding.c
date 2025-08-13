@@ -278,17 +278,37 @@ static int lnav_dump_connected(lua_State* L) {
         printf("have not mark connected.\n");
         return 0;
     }
-    int i;
-    for (i = 0; i < m->width * m->height; i++) {
-        int mark = m->connected[i];
-        if (mark > 0) {
-            printf("%d ", mark);
-        } else {
-            printf("* ");
+    
+    // 获取可选的边界参数
+    int left = 0, right = m->width - 1, bottom = 0, top = m->height - 1;
+    if (lua_gettop(L) >= 2 && !lua_isnil(L, 2)) left = (int)luaL_checknumber(L, 2);
+    if (lua_gettop(L) >= 3 && !lua_isnil(L, 3)) right = (int)luaL_checknumber(L, 3);
+    if (lua_gettop(L) >= 4 && !lua_isnil(L, 4)) bottom = (int)luaL_checknumber(L, 4);
+    if (lua_gettop(L) >= 5 && !lua_isnil(L, 5)) top = (int)luaL_checknumber(L, 5);
+    
+    // 边界检查
+    if (left < 0) left = 0;
+    if (right >= m->width) right = m->width - 1;
+    if (bottom < 0) bottom = 0;
+    if (top >= m->height) top = m->height - 1;
+    
+    if (left > right || bottom > top) {
+        printf("invalid range: left=%d, right=%d, bottom=%d, top=%d\n", left, right, bottom, top);
+        return 0;
+    }
+    
+    // 按行打印，确保换行正确
+    for (int y = bottom; y <= top; y++) {
+        for (int x = left; x <= right; x++) {
+            int pos = y * m->width + x;
+            int mark = m->connected[pos];
+            if (mark > 0) {
+                printf("%d ", mark);
+            } else {
+                printf("* ");
+            }
         }
-        if ((i + 1) % m->width == 0) {
-            printf("\n");
-        }
+        printf("\n"); // 每行结束后换行
     }
     return 0;
 }
@@ -296,37 +316,48 @@ static int lnav_dump_connected(lua_State* L) {
 static int lnav_dump(lua_State* L) {
     Map* m = luaL_checkudata(L, 1, MT_NAME);
     printf("dump map state!!!!!!\n");
-    int i, pos;
-    char *s = (char*)malloc((m->width * 2 + 2) * sizeof(char));
-    for (pos = 0, i = 0; i < m->width * m->height; i++) {
-        if (i > 0 && i % m->width == 0) {
-            s[pos - 1] = '\0';
-            printf("%s\n", s);
-            pos = 0;
-        }
-        int mark = 0;
-        if (BITTEST(m->m, i)) {
-            s[pos++] = '*';
-            mark = 1;
-        }
-        if (i == m->start) {
-            s[pos++] = 'S';
-            mark = 1;
-        }
-        if (i == m->end) {
-            s[pos++] = 'E';
-            mark = 1;
-        }
-        if (mark) {
-            s[pos++] = ' ';
-        } else {
-            s[pos++] = '.';
-            s[pos++] = ' ';
-        }
+    
+    // 获取可选的边界参数
+    int left = 0, right = m->width - 1, bottom = 0, top = m->height - 1;
+    if (lua_gettop(L) >= 2 && !lua_isnil(L, 2)) left = (int)luaL_checknumber(L, 2);
+    if (lua_gettop(L) >= 3 && !lua_isnil(L, 3)) right = (int)luaL_checknumber(L, 3);
+    if (lua_gettop(L) >= 4 && !lua_isnil(L, 4)) bottom = (int)luaL_checknumber(L, 4);
+    if (lua_gettop(L) >= 5 && !lua_isnil(L, 5)) top = (int)luaL_checknumber(L, 5);
+    
+    // 边界检查
+    if (left < 0) left = 0;
+    if (right >= m->width) right = m->width - 1;
+    if (bottom < 0) bottom = 0;
+    if (top >= m->height) top = m->height - 1;
+    
+    if (left > right || bottom > top) {
+        printf("invalid range: left=%d, right=%d, bottom=%d, top=%d\n", left, right, bottom, top);
+        return 0;
     }
-    s[pos - 1] = '\0';
-    printf("%s\n", s);
-    free(s);
+    
+    // 按行打印，确保换行正确
+    for (int y = bottom; y <= top; y++) {
+        for (int x = left; x <= right; x++) {
+            int pos = y * m->width + x;
+            int mark = 0;
+            if (BITTEST(m->m, pos)) {
+                printf("* ");
+                mark = 1;
+            }
+            if (pos == m->start) {
+                printf("S ");
+                mark = 1;
+            }
+            if (pos == m->end) {
+                printf("E ");
+                mark = 1;
+            }
+            if (!mark) {
+                printf(". ");
+            }
+        }
+        printf("\n"); // 每行结束后换行
+    }
     return 0;
 }
 
@@ -360,7 +391,9 @@ static int lnav_quick_remark_area(lua_State* L) {
             }
         }
     }
-    
+
+    printf("quick_remark_area: left=%d, right=%d, bottom=%d, top=%d, is_obstacle=%d\n", left, right, bottom, top, is_obstacle);
+
     // 第二步：收集outline格子
     int outline_capacity = 2 * (right - left + 1) + 2 * (bottom - top + 1) + 8;
     int *outline_list = (int*)malloc(outline_capacity * sizeof(int));
