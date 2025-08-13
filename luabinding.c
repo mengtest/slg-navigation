@@ -330,6 +330,135 @@ static int lnav_dump(lua_State* L) {
     return 0;
 }
 
+static int lnav_quick_remark_area(lua_State* L) {
+    Map* m = luaL_checkudata(L, 1, MT_NAME);
+    int left = (int)luaL_checknumber(L, 2);
+    int right = (int)luaL_checknumber(L, 3);
+    int top = (int)luaL_checknumber(L, 4);
+    int bottom = (int)luaL_checknumber(L, 5);
+    int is_obstacle = lua_toboolean(L, 6);
+    
+    // 边界检查
+    if (left < 0) left = 0;
+    if (right >= m->width) right = m->width - 1;
+    if (top < 0) top = 0;
+    if (bottom >= m->height) bottom = m->height - 1;
+    
+    if (left > right || top > bottom) {
+        return 0; // 无效范围
+    }
+    
+    // 第一步：设置矩形范围内的阻挡/非阻挡状态
+    for (int y = top; y <= bottom; y++) {
+        for (int x = left; x <= right; x++) {
+            int pos = y * m->width + x;
+            if (is_obstacle) {
+                BITSET(m->m, pos);
+                m->connected[pos] = 0;
+            } else {
+                BITCLEAR(m->m, pos);
+            }
+        }
+    }
+    
+    // 第二步：收集outline格子
+    int outline_capacity = 2 * (right - left + 1) + 2 * (bottom - top + 1) + 8;
+    int *outline_list = (int*)malloc(outline_capacity * sizeof(int));
+    int outline_count = 0;
+    
+    int pos = 0;
+    // 上边
+    if (top > 0) {
+        for (int x = (left > 0 ? left - 1 : 0); x <= (right < m->width - 1 ? right + 1 : m->width - 1); x++) {
+            pos = (top - 1) * m->width + x;
+            outline_list[outline_count++] = pos;
+        }
+    }
+    
+    // 下边
+    if (bottom < m->height - 1) {
+        for (int x = (left > 0 ? left - 1 : 0); x <= (right < m->width - 1 ? right + 1 : m->width - 1); x++) {
+            pos = (bottom + 1) * m->width + x;
+            outline_list[outline_count++] = pos;
+        }
+    }
+    
+    // 左边
+    if (left > 0) {
+        for (int y = top; y <= bottom; y++) {
+            pos = y * m->width + (left - 1);
+            outline_list[outline_count++] = pos;
+        }
+    }
+    
+    // 右边
+    if (right < m->width - 1) {
+        for (int y = top; y <= bottom; y++) {
+            pos = y * m->width + (right + 1);
+            outline_list[outline_count++] = pos;
+        }
+    }
+
+    int target_area_id = 0;
+    // 第三步：检查outline格子状态
+    int blocked_count = 0, walkable_count = 0;
+    for (int i = 0; i < outline_count; i++) {
+        if (BITTEST(m->m, outline_list[i])) {
+            blocked_count++;
+        } else {
+            walkable_count++;
+            target_area_id = m->connected[outline_list[i]];
+        }
+    }
+
+    // 先处理矩形内的格子（如果是非阻挡模式）
+    if (!is_obstacle) {
+        if (target_area_id == 0) {
+            target_area_id = ++m->mark_connected;
+        }
+        for (int y = top; y <= bottom; y++) {
+            for (int x = left; x <= right; x++) {
+                int pos = y * m->width + x;
+                m->connected[pos] = target_area_id;
+            }
+        }
+    }
+
+    if (blocked_count == 0) {
+        free(outline_list);
+        return 0;
+    }
+
+    // 如果状态统一，直接返回
+    if (blocked_count == 0 || walkable_count == 0) {
+        free(outline_list);
+        return 0;
+    }
+    
+    // 第四步：区域遍历和ID分配
+    int len = m->width * m->height;
+    memset(m->visited, 0, len * sizeof(char));
+    
+    int new_area_id = m->mark_connected + 1;
+    
+    // 第四步：从outline可行走格子开始遍历区域并设置area_id
+
+    // 遍历所有outline的可行走格子
+    for (int i = 0; i < outline_count; i++) {
+        int pos = outline_list[i];
+        if (!BITTEST(m->m, pos) && !m->visited[pos]) {
+            flood_mark(m, pos, new_area_id++, len);
+        }
+    }
+    
+    if (new_area_id > m->mark_connected + 1) {
+        m->mark_connected = new_area_id - 1;
+    }
+    
+    free(outline_list);
+    return 0;
+}
+
 static int gc(lua_State* L) {
     Map* m = luaL_checkudata(L, 1, MT_NAME);
     free(m->comefrom);
@@ -468,6 +597,7 @@ static int lmetatable(lua_State* L) {
                         {"mark_connected", lnav_mark_connected},
                         {"dump_connected", lnav_dump_connected},
                         {"dump", lnav_dump},
+                        {"quick_remark_area", lnav_quick_remark_area},
                         {NULL, NULL}};
         luaL_newlib(L, l);
         lua_setfield(L, -2, "__index");
