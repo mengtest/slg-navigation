@@ -235,11 +235,11 @@ end
 
 ---@param left number
 ---@param right number
----@param top number
 ---@param bottom number
+---@param top number
 ---@param is_obstacle boolean 是否设置为阻挡
-function mt:quick_remark_area(left, right, top, bottom, is_obstacle)
-    return self.core:quick_remark_area(left, right, top, bottom, is_obstacle)
+function mt:quick_remark_area(left, right, bottom, top, is_obstacle)
+    return self.core:quick_remark_area(left, right, bottom, top, is_obstacle)
 end
 
 function mt:get_area_id_by_pos(pos)
@@ -569,7 +569,9 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
     end
     for pos in pairs(ignore_map) do
         self.core:clear_block(mfloor(pos.x), mfloor(pos.y))
-        self:set_connected_id(pos, self:get_neighbor_area_id(pos, #ignore_list))
+        local next_area_id = self:get_neighbor_area_id(pos, #ignore_list + 1)
+        assert(next_area_id > 0, "get_neighbor_area_id failed")
+        self:set_connected_id(pos, next_area_id)
     end
     local path
     local from_area_id = self:get_area_id_by_pos(from_pos)
@@ -584,10 +586,12 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
                     y = pos[2]
                 }
             end
-        elseif from_area_id == 0 then
-            path = find_path_start_in_portal(self, from_area_id, from_pos, to_area_id, to_pos)
+        -- elseif from_area_id == 0 then
+        --     path = find_path_start_in_portal(self, from_area_id, from_pos, to_area_id, to_pos)
         else
-            path = find_path_cross_area(self, from_area_id, from_pos, to_area_id, to_pos)
+            -- path = find_path_cross_area(self, from_area_id, from_pos, to_area_id, to_pos)
+            print("find_path from_area_id:", from_area_id, "to_area_id:", to_area_id)
+            path = {}
         end
     end, debug.traceback)
     if not ok then
@@ -597,6 +601,7 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
     for pos in pairs(ignore_map) do
         self.core:add_block(mfloor(pos.x), mfloor(pos.y))
         self:set_connected_id(pos, 0)
+        print("find_path set_block:", pos.x, pos.y)
     end
     if #path < 2 then
         print(string.format("cannot find path (%s, %s) =>(%s, %s)", from_pos.x, from_pos.y, to_pos.x, to_pos.y))

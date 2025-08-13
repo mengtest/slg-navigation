@@ -334,22 +334,22 @@ static int lnav_quick_remark_area(lua_State* L) {
     Map* m = luaL_checkudata(L, 1, MT_NAME);
     int left = (int)luaL_checknumber(L, 2);
     int right = (int)luaL_checknumber(L, 3);
-    int top = (int)luaL_checknumber(L, 4);
-    int bottom = (int)luaL_checknumber(L, 5);
+    int bottom = (int)luaL_checknumber(L, 4);
+    int top = (int)luaL_checknumber(L, 5);
     int is_obstacle = lua_toboolean(L, 6);
     
     // 边界检查
     if (left < 0) left = 0;
     if (right >= m->width) right = m->width - 1;
-    if (top < 0) top = 0;
-    if (bottom >= m->height) bottom = m->height - 1;
+    if (bottom < 0) bottom = 0;
+    if (top >= m->height) top = m->height - 1;
     
-    if (left > right || top > bottom) {
+    if (left > right || bottom > top) {
         return 0; // 无效范围
     }
     
     // 第一步：设置矩形范围内的阻挡/非阻挡状态
-    for (int y = top; y <= bottom; y++) {
+    for (int y = bottom; y <= top; y++) {
         for (int x = left; x <= right; x++) {
             int pos = y * m->width + x;
             if (is_obstacle) {
@@ -368,24 +368,24 @@ static int lnav_quick_remark_area(lua_State* L) {
     
     int pos = 0;
     // 上边
-    if (top > 0) {
+    if (bottom > 0) {
         for (int x = (left > 0 ? left - 1 : 0); x <= (right < m->width - 1 ? right + 1 : m->width - 1); x++) {
-            pos = (top - 1) * m->width + x;
+            pos = (bottom - 1) * m->width + x;
             outline_list[outline_count++] = pos;
         }
     }
     
     // 下边
-    if (bottom < m->height - 1) {
+    if (top < m->height - 1) {
         for (int x = (left > 0 ? left - 1 : 0); x <= (right < m->width - 1 ? right + 1 : m->width - 1); x++) {
-            pos = (bottom + 1) * m->width + x;
+            pos = (top + 1) * m->width + x;
             outline_list[outline_count++] = pos;
         }
     }
     
     // 左边
     if (left > 0) {
-        for (int y = top; y <= bottom; y++) {
+        for (int y = bottom; y <= top; y++) {
             pos = y * m->width + (left - 1);
             outline_list[outline_count++] = pos;
         }
@@ -393,7 +393,7 @@ static int lnav_quick_remark_area(lua_State* L) {
     
     // 右边
     if (right < m->width - 1) {
-        for (int y = top; y <= bottom; y++) {
+        for (int y = bottom; y <= top; y++) {
             pos = y * m->width + (right + 1);
             outline_list[outline_count++] = pos;
         }
@@ -416,17 +416,12 @@ static int lnav_quick_remark_area(lua_State* L) {
         if (target_area_id == 0) {
             target_area_id = ++m->mark_connected;
         }
-        for (int y = top; y <= bottom; y++) {
+        for (int y = bottom; y <= top; y++) {
             for (int x = left; x <= right; x++) {
                 int pos = y * m->width + x;
                 m->connected[pos] = target_area_id;
             }
         }
-    }
-
-    if (blocked_count == 0) {
-        free(outline_list);
-        return 0;
     }
 
     // 如果状态统一，直接返回
