@@ -13,6 +13,7 @@
 #define BITSET(a, b) ((a)[BITSLOT(b)] |= BITMASK(b))
 #define BITCLEAR(a, b) ((a)[BITSLOT(b)] &= ~BITMASK(b))
 #define BITTEST(a, b) ((a)[BITSLOT(b)] & BITMASK(b))
+#define MAX_REMARK_OUTLINE_COUNT 10000
 
 typedef struct map {
     int width;
@@ -23,6 +24,7 @@ typedef struct map {
     int mark_connected;
     int* connected;
     int *queue;
+    int *remark_outline;
     char *visited;
 
     struct heap_node** open_set_map;

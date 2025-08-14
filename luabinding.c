@@ -392,19 +392,21 @@ static int lnav_quick_remark_area(lua_State* L) {
         }
     }
 
-    printf("quick_remark_area: left=%d, right=%d, bottom=%d, top=%d, is_obstacle=%d\n", left, right, bottom, top, is_obstacle);
+    // printf("quick_remark_area: left=%d, right=%d, bottom=%d, top=%d, is_obstacle=%d\n", left, right, bottom, top, is_obstacle);
 
     // 第二步：收集outline格子
-    int outline_capacity = 2 * (right - left + 1) + 2 * (bottom - top + 1) + 8;
-    int *outline_list = (int*)malloc(outline_capacity * sizeof(int));
     int outline_count = 0;
+    memset(m->remark_outline, 0, MAX_REMARK_OUTLINE_COUNT * sizeof(int));
+    if (outline_count >= MAX_REMARK_OUTLINE_COUNT) {
+        luaL_error(L, "outline_count >= MAX_REMARK_OUTLINE_COUNT");
+    }
     
     int pos = 0;
     // 上边
     if (bottom > 0) {
         for (int x = (left > 0 ? left - 1 : 0); x <= (right < m->width - 1 ? right + 1 : m->width - 1); x++) {
             pos = (bottom - 1) * m->width + x;
-            outline_list[outline_count++] = pos;
+            m->remark_outline[outline_count++] = pos;
         }
     }
     
@@ -412,7 +414,7 @@ static int lnav_quick_remark_area(lua_State* L) {
     if (top < m->height - 1) {
         for (int x = (left > 0 ? left - 1 : 0); x <= (right < m->width - 1 ? right + 1 : m->width - 1); x++) {
             pos = (top + 1) * m->width + x;
-            outline_list[outline_count++] = pos;
+            m->remark_outline[outline_count++] = pos;
         }
     }
     
@@ -420,7 +422,7 @@ static int lnav_quick_remark_area(lua_State* L) {
     if (left > 0) {
         for (int y = bottom; y <= top; y++) {
             pos = y * m->width + (left - 1);
-            outline_list[outline_count++] = pos;
+            m->remark_outline[outline_count++] = pos;
         }
     }
     
@@ -428,7 +430,7 @@ static int lnav_quick_remark_area(lua_State* L) {
     if (right < m->width - 1) {
         for (int y = bottom; y <= top; y++) {
             pos = y * m->width + (right + 1);
-            outline_list[outline_count++] = pos;
+            m->remark_outline[outline_count++] = pos;
         }
     }
 
@@ -436,11 +438,11 @@ static int lnav_quick_remark_area(lua_State* L) {
     // 第三步：检查outline格子状态
     int blocked_count = 0, walkable_count = 0;
     for (int i = 0; i < outline_count; i++) {
-        if (BITTEST(m->m, outline_list[i])) {
+        if (BITTEST(m->m, m->remark_outline[i])) {
             blocked_count++;
         } else {
             walkable_count++;
-            target_area_id = m->connected[outline_list[i]];
+            target_area_id = m->connected[m->remark_outline[i]];
         }
     }
 
@@ -459,7 +461,6 @@ static int lnav_quick_remark_area(lua_State* L) {
 
     // 如果状态统一，直接返回
     if (blocked_count == 0 || walkable_count == 0) {
-        free(outline_list);
         return 0;
     }
     
@@ -473,7 +474,7 @@ static int lnav_quick_remark_area(lua_State* L) {
 
     // 遍历所有outline的可行走格子
     for (int i = 0; i < outline_count; i++) {
-        int pos = outline_list[i];
+        int pos = m->remark_outline[i];
         if (!BITTEST(m->m, pos) && !m->visited[pos]) {
             flood_mark(m, pos, new_area_id++, len);
         }
@@ -483,7 +484,6 @@ static int lnav_quick_remark_area(lua_State* L) {
         m->mark_connected = new_area_id - 1;
     }
     
-    free(outline_list);
     return 0;
 }
 
@@ -496,6 +496,7 @@ static int gc(lua_State* L) {
     }
     free(m->queue);
     free(m->visited);
+    free(m->remark_outline);
     return 0;
 }
 
