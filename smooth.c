@@ -3,51 +3,62 @@
 #include "map.h"
 #include <math.h>
 
+// 检查线段是否与格子相交
+int line_intersects_grid(float x1, float y1, float x2, float y2, int gx, int gy) {
+    // 格子边界
+    float left = gx, right = gx + 1;
+    float bottom = gy, top = gy + 1;
+    
+    // 线段参数方程: P = (x1,y1) + t*((x2,y2)-(x1,y1))，t在[0,1]
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    
+    // 检查与格子四条边的交集
+    float t_min = 0, t_max = 1;
+    
+    // 检查垂直边界 (left, right)
+    if (dx != 0) {
+        float t1 = (left - x1) / dx;
+        float t2 = (right - x1) / dx;
+        if (t1 > t2) { float temp = t1; t1 = t2; t2 = temp; }
+        t_min = fmaxf(t_min, t1);
+        t_max = fminf(t_max, t2);
+    } else if (x1 < left || x1 > right) {
+        return 0; // 线段与格子不相交
+    }
+    
+    // 检查水平边界 (bottom, top)  
+    if (dy != 0) {
+        float t1 = (bottom - y1) / dy;
+        float t2 = (top - y1) / dy;
+        if (t1 > t2) { float temp = t1; t1 = t2; t2 = temp; }
+        t_min = fmaxf(t_min, t1);
+        t_max = fminf(t_max, t2);
+    } else if (y1 < bottom || y1 > top) {
+        return 0; // 线段与格子不相交
+    }
+    
+    return t_min <= t_max;
+}
+
 int find_line_obstacle(Map* m, float x1, float y1, float x2, float y2) {
-    // 检查起点和终点
-    int start_x = (int)x1;
-    int start_y = (int)y1;
-    int end_x = (int)x2;
-    int end_y = (int)y2;
+    // 确定需要检查的格子范围
+    int min_x = (int)fminf(x1, x2);
+    int max_x = (int)fmaxf(x1, x2);
+    int min_y = (int)fminf(y1, y2);
+    int max_y = (int)fmaxf(y1, y2);
     
-    if (!map_walkable(m, xy2pos(m, start_x, start_y))) {
-        return xy2pos(m, start_x, start_y);
-    }
-    if (!map_walkable(m, xy2pos(m, end_x, end_y))) {
-        return xy2pos(m, end_x, end_y);
-    }
-    
-    // 使用 Bresenham 算法遍历直线上的所有格子
-    int dx = abs(end_x - start_x);
-    int dy = abs(end_y - start_y);
-    int x = start_x;
-    int y = start_y;
-    
-    int x_inc = (end_x > start_x) ? 1 : -1;
-    int y_inc = (end_y > start_y) ? 1 : -1;
-    
-    int error = dx - dy;
-    
-    // 遍历路径上的每个格子
-    while (x != end_x || y != end_y) {
-        // 移动到下一个格子
-        int error2 = 2 * error;
-        
-        if (error2 > -dy) {
-            error -= dy;
-            x += x_inc;
-            // 每次移动后立即检查
-            if (!map_walkable(m, xy2pos(m, x, y))) {
-                return xy2pos(m, x, y);
-            }
-        }
-        
-        if (error2 < dx) {
-            error += dx;
-            y += y_inc;
-            // 每次移动后立即检查
-            if (!map_walkable(m, xy2pos(m, x, y))) {
-                return xy2pos(m, x, y);
+    // 检查线段经过的每个格子
+    for (int y = min_y; y <= max_y; y++) {
+        for (int x = min_x; x <= max_x; x++) {
+            if (x >= 0 && x < m->width && y >= 0 && y < m->height) {
+                int pos = xy2pos(m, x, y);
+                if (!map_walkable(m, pos)) {
+                    // 检查线段是否与这个障碍物格子相交
+                    if (line_intersects_grid(x1, y1, x2, y2, x, y)) {
+                        return pos;
+                    }
+                }
             }
         }
     }
@@ -57,21 +68,18 @@ int find_line_obstacle(Map* m, float x1, float y1, float x2, float y2) {
 
 void smooth_path(Map* m) {
     int x1, y1, x2, y2;
-    for (int i = m->ipath_len - 1; i >= 0; i--) {
-        for (int j = 0; j < i - 1; j++) {
+    for (int i = m->ipath_len - 1; i >= 2; i--) {
+        for (int j = 0; j <= i - 2; j++) {
             pos2xy(m, m->ipath[i], &x1, &y1);
             pos2xy(m, m->ipath[j], &x2, &y2);
-            // printf("check (%d)%d <=> (%d)%d\n", i, m->ipath[i], j, m->ipath[j]);
-            if (find_line_obstacle(m, x1 + 0.5, y1 + 0.5, x2 + 0.5,
-                                    y2 + 0.5) < 0) {
+            // 使用浮点坐标（格子中心）进行障碍物检测
+            if (find_line_obstacle(m, x1 + 0.5, y1 + 0.5, x2 + 0.5, y2 + 0.5) < 0) {
                 int offset = i - j - 1;
-                // printf("merge (%d) to (%d) offset:%d\n", i, j, offset);
                 for (int k = j + 1; k <= m->ipath_len - 1 - offset; k++) {
                     m->ipath[k] = m->ipath[k + offset];
-                    // printf("%d <= %d\n", k, k + offset);
                 }
                 m->ipath_len -= offset;
-                i = j + 1;
+                i = i - offset;
                 break;
             }
         }

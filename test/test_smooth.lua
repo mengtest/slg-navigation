@@ -1,10 +1,11 @@
 local navigation = require "navigation.c"
 local nav = navigation.new {
-    w = 5,
-    h = 5,
+    w = 20,
+    h = 20,
     obstacle = {
-        {1, 2},
-        {2, 1},
+        {8, 6},
+        {10, 6},
+        {11, 6},
     }
 }
 
@@ -20,7 +21,4 @@ end
 
 nav:dump()
 
--- test_find_path(1.5, 3.5, 2.5, 2.5)
-test_find_path(1.1, 3.1, 2.1, 2.1)
-test_find_path(2.1, 2.1, 1.1, 3.1)
-test_find_path(2.5, 2.5, 1.5, 1.5)
+test_find_path(11.5, 7.5, 9.5, 4.5)
