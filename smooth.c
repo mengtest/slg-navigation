@@ -66,10 +66,18 @@ int find_line_obstacle(Map* m, float x1, float y1, float x2, float y2) {
     return -1;
 }
 
-void smooth_path(Map* m) {
+void smooth_path(Map* m, int smooth_count) {
+    // 如果平滑数量小于3，不进行平滑处理
+    if (smooth_count < 3) {
+        return;
+    }
+    
     int x1, y1, x2, y2;
-    for (int i = m->ipath_len - 1; i >= 2; i--) {
-        for (int j = 0; j <= i - 2; j++) {
+    // 确定要处理的路点范围：前smooth_count个路点（索引从后往前数）
+    int start_idx = (smooth_count >= m->ipath_len) ? 0 : m->ipath_len - smooth_count;
+    
+    for (int i = m->ipath_len - 1; i >= start_idx + 2; i--) {
+        for (int j = start_idx; j <= i - 2; j++) {
             pos2xy(m, m->ipath[i], &x1, &y1);
             pos2xy(m, m->ipath[j], &x2, &y2);
             // 使用浮点坐标（格子中心）进行障碍物检测

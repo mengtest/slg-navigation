@@ -558,7 +558,7 @@ function mt:get_neighbor_area_id(pos, max_size)
     return 0
 end
 
-function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
+function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list, smooth_count)
     ignore_list = ignore_list or { } 
     ignore_list[#ignore_list + 1] = from_pos -- 自动忽略起点
     local ignore_map = {}
@@ -578,7 +578,7 @@ function mt:find_path(from_pos, to_pos, check_portal_func, ignore_list)
     local to_area_id = self:get_area_id_by_pos(to_pos)
     local ok, errmsg = xpcall(function()
         if from_area_id == to_area_id then
-            local cpath = self.core:find_path(from_pos.x, from_pos.y, to_pos.x, to_pos.y) or {}
+            local cpath = self.core:find_path(from_pos.x, from_pos.y, to_pos.x, to_pos.y, smooth_count) or {}
             path = {}
             for _, pos in ipairs(cpath) do
                 path[#path + 1] = {

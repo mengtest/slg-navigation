@@ -4,6 +4,6 @@
 #include "map.h"
 
 int find_line_obstacle(Map *m, float x1, float y1, float x2, float y2);
-void smooth_path(Map *m);
+void smooth_path(Map *m, int smooth_count);
 
 #endif /* __SMOOTH_H__ */

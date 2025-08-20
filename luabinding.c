@@ -542,6 +542,9 @@ static int lnav_find_path(lua_State* L) {
     } else {
         luaL_error(L, "Position (%d,%d) is out of map", x, y);
     }
+    // 新增：平滑路点数量参数，默认为整条路径
+    int smooth_count = luaL_optinteger(L, 6, INT_MAX);
+    
     if(floor(fx1) == floor(fx2) && floor(fy1) == floor(fy2)) {
         lua_newtable(L);
         push_fpos(L, fx1, fy1, 1);
@@ -564,7 +567,7 @@ static int lnav_find_path(lua_State* L) {
     int start_pos = jps_find_path(m);
     if (start_pos >= 0) {
         form_ipath(m, start_pos);
-        smooth_path(m);
+        smooth_path(m, smooth_count);
         push_path_to_fstack(L, m, fx1, fy1, fx2, fy2);
         return 1;
     }
@@ -598,11 +601,12 @@ static int lnav_find_path_by_grid(lua_State* L) {
         return 0;
     }
     int without_smooth = lua_toboolean(L, 6);
+    int smooth_count = luaL_optinteger(L, 7, INT_MAX);
     int start_pos = jps_find_path(m);
     if (start_pos >= 0) {
         form_ipath(m, start_pos);
         if (!without_smooth) {
-            smooth_path(m);
+            smooth_path(m, smooth_count);
         }
         push_path_to_istack(L, m);
         return 1;
