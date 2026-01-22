@@ -497,6 +497,7 @@ static int gc(lua_State* L) {
     free(m->queue);
     free(m->visited);
     free(m->remark_outline);
+    free(m->ipath);
     return 0;
 }
 

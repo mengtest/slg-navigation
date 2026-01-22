@@ -186,8 +186,10 @@ int jps_find_path(Map *m) {
         BITSET(m->m, (BITSLOT(len) + 1) * CHAR_BIT + node->pos);
 
         if (node->pos == m->end) {
+            int pos = node->pos;
+            free(node);
             fibheap_destroy(open_set);
-            return node->pos;
+            return pos;
         }
         unsigned char cur_dir = node->dir;
         unsigned char check_dirs = natural_dir(node->pos, cur_dir, m) | force_dir(node->pos, cur_dir, m);
@@ -198,6 +200,7 @@ int jps_find_path(Map *m) {
             }
             dir = next_dir(&check_dirs);
         }
+        free(node);
     }
     fibheap_destroy(open_set);
     return -1;
